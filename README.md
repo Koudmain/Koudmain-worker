@@ -59,8 +59,6 @@ go build -ldflags="-s -w" -o bin/koudmain ./cmd/koudmain
 go build -v ./cmd/koudmain
 ```
 
-
-
 ## Architecture du projet
 
 ```
@@ -370,7 +368,7 @@ Créez un `Makefile` pour simplifier :
 ```makefile
 # Variables
 BINARY_NAME="koudmain-worker"
-MAIN_PATH="./cmd/koudmain/main.go"
+MAIN_PATH="./cmd/koudmain"
 
 # Commands
 all:	build
@@ -421,7 +419,3 @@ go mod download
 lsof -i :8080
 kill -9 <PID>
 ```
-
----
-
-Vous avez des questions sur l'architecture ou besoin de clarifications ? 🎯

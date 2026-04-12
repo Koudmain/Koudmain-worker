@@ -1,6 +1,6 @@
 # Variables
 BINARY_NAME="koudmain-worker"
-MAIN_PATH="./cmd/koudmain/main.go"
+MAIN_PATH="./cmd/koudmain"
 
 # Commands
 all:	build
