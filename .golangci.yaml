@@ -1,0 +1,77 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck # Checks for unchecked errors (e.g., file.Close())
+    - govet # The standard Go tool, indispensable
+    - ineffassign # Detects useless assignments (variable overwritten before read)
+    - staticcheck # A powerful suite of checks (the "super linter")
+    - unused # Detects dead code (unused functions/constants)
+    - gocritic # Includes checks for concurrent map access, mutex issues
+    - bodyclose # CRITICAL: Ensures HTTP response bodies are closed (avoids memory leaks with Trackers)
+    - noctx # checks that HTTP requests use a Context (good for timeouts/cancellation)
+    - errorlint # Ensures proper error wrapping with fmt.Errorf and %w
+    - prealloc # Suggests slice preallocation (can help with frequent allocations)
+    - misspell # Fixes English typos in comments (optional but nice)
+    - revive # Modern replacement for golint. Checks naming conventions, comments, etc.
+    - gosec # Checks for common security issues (weak crypto, etc.)
+    - gosimple # Code simplification
+    - nilnil # Detect of return nil, nil (useless)
+
+  settings:
+    govet:
+      # Disable all analyzers.
+      disable-all: true
+      enable:
+        - shadow # Warns if you declare a variable that shadows another (common bug)
+
+    errcheck:
+      # Ignore errors for these specific functions
+      # (it's common practice not to check Close on defer or Write on logs)
+      exclude-functions:
+        - (io.Closer).Close
+        - fmt.Printf
+        - fmt.Println
+        - os.Remove
+
+    revive:
+      # "Soft" configuration to avoid being too rigid
+      rules:
+        - name: exported
+          severity: warning
+          disabled: false
+          arguments:
+            - disableStutteringCheck # Allows names like `torrent.TorrentFile` (avoids "stutter" warnings)
+        - name: package-comments
+          disabled: true # Does not force you to write comments for every single package
+
+    gocritic:
+      enabled-checks:
+        - ruleguard
+        - truncateCmp
+      disabled-checks:
+        - ifElseChain # Can be noisy
+        - singleCaseSwitch # Sometimes intentional for readability
+
+formatters:
+  settings:
+    goimports:
+      local-prefixes:
+        - koudmain-worker
+    gofmt:
+      simplify: false
+      rewrite-rules:
+        - pattern: "interface{}"
+          replacement: "any"
+        - pattern: "a[b:len(a)]"
+          replacement: "a[b:]"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-rules:
+    # Less strict for security in tests
+    - path: _test\.go
+      linters:
+        - gosec
