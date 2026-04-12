@@ -28,7 +28,7 @@ FROM base AS development
 RUN go install github.com/air-verse/air@latest
 
 # Exposer le port
-EXPOSE 3005
+EXPOSE 4000
 
 # Lancer air pour le hot reload
 CMD ["air", "-c", ".air.toml"]
