@@ -23,8 +23,8 @@ Un worker backend performant écrit en Go, conçu pour traiter des tâches async
 
 ```bash
 # Cloner le repository
-git clone git@github.com:Koudmain/Koudmain-backend-worker.git
-cd Koudmain-backend-worker
+git clone git@github.com:Koudmain/Koudmain-worker.git
+cd Koudmain-worker
 
 # Télécharger les dépendances
 go mod download
