@@ -1,62 +1,55 @@
 package main
 
 import (
-    "context"
-    "encoding/json"
-    "fmt"
-    "log"
-    "net/http"
-    "os"
-    "strconv"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
 
-    "koudmain-worker/internal/chat"
-    "koudmain-worker/internal/model"
-    "koudmain-worker/internal/repository"
-    "github.com/gorilla/websocket"
+	"koudmain-worker/internal/chat"
+	"koudmain-worker/internal/model"
+	"koudmain-worker/internal/repository"
+	"koudmain-worker/internal/server"
 )
 
-var upgrader = websocket.Upgrader{
-    CheckOrigin: func(r *http.Request) bool { return true }, // Equivalent CORS *
-}
-
 func main() {
-    redisHost := os.Getenv("REDIS_HOST")
-	redisPort := os.Getenv("REDIS_PORT")
-	redisPassword := os.Getenv("REDIS_PASSWORD")
-
+	redisHost := os.Getenv("REDIS_HOST")
 	if redisHost == "" { redisHost = "redis" }
+	redisPort := os.Getenv("REDIS_PORT")
 	if redisPort == "" { redisPort = "6379" }
+	redisPassword := os.Getenv("REDIS_PASSWORD")
 
 	redisRepo, err := repository.NewRedisRepository(redisHost, redisPort, redisPassword)
 	if err != nil {
-		log.Fatalf("Erreur de connexion Redis : %v", err)
+		log.Fatalf("Erreur Redis : %v", err)
 	}
+	fmt.Println("Connecté à Redis")
 
-	fmt.Println("Worker Go connecté à Redis avec succès !")
+	myHub := chat.NewHub()
 
-    myHub := chat.NewHub()
+	go func() {
+		ctx := context.Background()
+		msgs := redisRepo.Subscribe(ctx, "chat:messages")
+		for msg := range msgs {
+			var chatMsg model.ChatMessage
+			if err := json.Unmarshal([]byte(msg.Payload), &chatMsg); err != nil {
+				log.Printf("Erreur JSON: %v", err)
+				continue
+			}
 
-    go func() {
-        ctx := context.Background()
-        msgs := redisRepo.Subscribe(ctx, "chat:messages")
-        for msg := range msgs {
-            var chatMsg model.ChatMessage
-            json.Unmarshal([]byte(msg.Payload), &chatMsg)
+			log.Printf("Routing message to User %d", chatMsg.ReceiverID)
+			myHub.SendToUser(chatMsg.ReceiverID, []byte(msg.Payload))
+		}
+	}()
 
-            myHub.SendToUser(chatMsg.SenderID, []byte(msg.Payload))
-        }
-    }()
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		server.ServeWS(myHub, w, r)
+	})
 
-    http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-        conn, err := upgrader.Upgrade(w, r, nil)
-        if err != nil { return }
-
-        userID, _ := strconv.Atoi(r.URL.Query().Get("userId"))
-
-        myHub.Register(userID, conn)
-        fmt.Printf("Utilisateur %d connecté !\n", userID)
-    })
-
-    fmt.Println("Worker démarré sur :4000")
-    log.Fatal(http.ListenAndServe(":4000", nil))
+	fmt.Println("Worker démarré sur le port :4000")
+	if err := http.ListenAndServe(":4000", nil); err != nil {
+		log.Fatal(err)
+	}
 }
