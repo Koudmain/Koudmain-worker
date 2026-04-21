@@ -1,0 +1,23 @@
+repos:
+  - repo: local
+    hooks:
+      - id: format-fix
+        name: 🎨 Fix formatting (Prettier)
+        entry: npm run format:fix
+        language: system
+        files: \.(js|ts|jsx|tsx|json|css|md)$
+        pass_filenames: false
+
+      - id: lint-check
+        name: 🕵️ Check code quality (ESLint)
+        entry: npm run lint:check
+        language: system
+        files: \.(js|ts|jsx|tsx)$
+        pass_filenames: false
+
+      - id: betterleaks-docker
+        name: 🔒 Detect hardcoded secrets
+        description: Detect hardcoded secrets using Betterleaks
+        entry: ghcr.io/betterleaks/betterleaks:latest git --pre-commit --redact --staged --verbose
+        language: docker_image
+        pass_filenames: false
