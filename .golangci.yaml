@@ -16,7 +16,6 @@ linters:
     - misspell # Fixes English typos in comments (optional but nice)
     - revive # Modern replacement for golint. Checks naming conventions, comments, etc.
     - gosec # Checks for common security issues (weak crypto, etc.)
-    - gosimple # Code simplification
     - nilnil # Detect of return nil, nil (useless)
 
   settings:
@@ -70,8 +69,3 @@ formatters:
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-rules:
-    # Less strict for security in tests
-    - path: _test\.go
-      linters:
-        - gosec

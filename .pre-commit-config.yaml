@@ -1,6 +1,24 @@
 repos:
   - repo: local
     hooks:
+      - id: go-format
+        name: 🎨 Format Go project
+        entry: golangci-lint fmt
+        language: system
+        files: \.(go)$
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: go-linter
+        name: 🔍 Lint Go project
+        entry: golangci-lint run
+        language: system
+        files: \.(go)$
+        pass_filenames: false
+
+  - repo: local
+    hooks:
       - id: betterleaks-docker
         name: 🔒 Detect hardcoded secrets
         description: Detect hardcoded secrets using Betterleaks
