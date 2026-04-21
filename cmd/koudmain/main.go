@@ -41,6 +41,8 @@ func main() {
 
 			log.Printf("Routing message to User %d", chatMsg.ReceiverID)
 			myHub.SendToUser(chatMsg.ReceiverID, []byte(msg.Payload))
+
+			myHub.SendToUser(chatMsg.SenderID, []byte(msg.Payload))
 		}
 	}()
 
