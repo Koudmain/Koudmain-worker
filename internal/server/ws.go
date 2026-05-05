@@ -43,9 +43,9 @@ func ServeWS(hub *chat.Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userIDFloat, ok := claims["sub"].(float64)
+	userIDFloat, ok := claims["sub"].(string)
 	if !ok {
-		log.Printf("Champ 'sub' manquant dans le JWT")
+		log.Printf("Champ 'sub' manquant ou n'est pas une string dans le JWT")
 		return
 	}
 	userID := int(userIDFloat)
@@ -57,7 +57,7 @@ func ServeWS(hub *chat.Hub, w http.ResponseWriter, r *http.Request) {
 	}
 
 	hub.Register(userID, conn)
-	log.Printf("Utilisateur %d authentifié et connecté", userID)
+	log.Printf("Utilisateur %s authentifié et connecté", userID)
 
 	defer func() {
 		hub.Unregister(userID)
