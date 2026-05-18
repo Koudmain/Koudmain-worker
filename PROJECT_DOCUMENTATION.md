@@ -72,7 +72,7 @@ Règles pratiques :
 
 ---
 
-Conventions de commentaires (GoDoc)
+## Conventions de commentaires (GoDoc)
 
 Le projet suit les conventions GoDoc pour documenter les types et fonctions. Principes pratiques :
 
