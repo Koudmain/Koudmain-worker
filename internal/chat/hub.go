@@ -6,18 +6,23 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type Conn interface {
+	Close() error
+	WriteMessage(messageType int, data []byte) error
+}
+
 type Hub struct {
-	Clients map[int]*websocket.Conn
+	Clients map[int]Conn
 	mu      sync.RWMutex
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		Clients: make(map[int]*websocket.Conn),
+		Clients: make(map[int]Conn),
 	}
 }
 
-func (h *Hub) Register(userID int, conn *websocket.Conn) {
+func (h *Hub) Register(userID int, conn Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.Clients[userID] = conn
