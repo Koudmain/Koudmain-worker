@@ -11,10 +11,37 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Package server fournit les handlers HTTP/WS utilisés par l'application.
+// Il contient notamment la logique d'upgrade WebSocket et d'authentification JWT.
+
+// upgrader est utilisé pour promouvoir une requête HTTP vers une connexion WebSocket.
+// La fonction CheckOrigin est permissive ici (retourne toujours true) —
+// adapter cette vérification en production si nécessaire pour restreindre les origines.
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+// ServeWS upgrade la requête HTTP en WebSocket après vérification du JWT.
+//
+// Arguments:
+//   - hub: instance du Hub où enregistrer/désenregistrer la connexion.
+//   - w: ResponseWriter HTTP utilisé pour l'upgrade et les réponses d'erreur.
+//   - r: requête HTTP entrante contenant la query `token`.
+//
+// Comportement :
+// - lit le paramètre `token` depuis la query string
+// - valide le JWT avec la clé `JWT_ACCESS_SECRET` (variable d'environnement)
+// - extrait la claim `sub` comme identifiant d'utilisateur (attendu en nombre)
+// - effectue l'upgrade WebSocket et enregistre la connexion dans le `hub`
+// - la connexion est conservée tant que `ReadMessage` renvoie des messages;
+//   en cas d'erreur la boucle se termine et la connexion est désenregistrée.
+//
+// Retour:
+//   - aucun retour direct ; la fonction écrit des réponses HTTP en cas d'erreur
+//     (ex. 401 Unauthorized) et gère le cycle de vie de la connexion via le hub.
+//
+// Effets secondaires : enregistre/annule l'enregistrement du client via `hub.Register` / `hub.Unregister`.
+// Note : la fonction renvoie des réponses HTTP 401 pour les cas d'authentification invalides.
 func ServeWS(hub *chat.Hub, w http.ResponseWriter, r *http.Request) {
 	tokenString := r.URL.Query().Get("token")
 	if tokenString == "" {
