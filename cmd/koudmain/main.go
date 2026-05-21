@@ -4,20 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
-	"os"
 	"koudmain-worker/internal/chat"
 	"koudmain-worker/internal/model"
 	"koudmain-worker/internal/repository"
 	"koudmain-worker/internal/server"
+	"log"
+	"net/http"
+	"os"
 )
 
 func main() {
 	redisHost := os.Getenv("REDIS_HOST")
-	if redisHost == "" { redisHost = "redis" }
+	if redisHost == "" {
+		redisHost = "redis"
+	}
 	redisPort := os.Getenv("REDIS_PORT")
-	if redisPort == "" { redisPort = "6379" }
+	if redisPort == "" {
+		redisPort = "6379"
+	}
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 
 	redisRepo, err := repository.NewRedisRepository(redisHost, redisPort, redisPassword)
@@ -50,7 +54,14 @@ func main() {
 	})
 
 	fmt.Println("Worker démarré sur le port :4000")
-	if err := http.ListenAndServe(":4000", nil); err != nil {
+	server := &http.Server{
+		Addr:         ":4000",
+		Handler:      nil,
+		ReadTimeout:  15 * 15,
+		WriteTimeout: 15 * 15,
+		IdleTimeout:  60 * 15,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -1,9 +1,9 @@
 package chat
 
 import (
-	"sync"
-
 	"github.com/gorilla/websocket"
+	"sync"
+	"log"
 )
 
 // Conn est l'interface minimale attendue par le Hub pour représenter
@@ -81,6 +81,9 @@ func (h *Hub) SendToUser(userID int, data []byte) {
 	h.mu.RUnlock()
 
 	if ok {
-		client.WriteMessage(websocket.TextMessage, data)
+		if err := client.WriteMessage(websocket.TextMessage, data); err != nil {
+			log.Printf("Impossible d'envoyer le message au client : %v", err)
+			return
+		}
 	}
 }

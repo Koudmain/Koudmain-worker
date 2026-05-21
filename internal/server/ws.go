@@ -18,7 +18,7 @@ import (
 // La fonction CheckOrigin est permissive ici (retourne toujours true) —
 // adapter cette vérification en production si nécessaire pour restreindre les origines.
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: func(_ *http.Request) bool { return true },
 }
 
 // ServeWS upgrade la requête HTTP en WebSocket après vérification du JWT.

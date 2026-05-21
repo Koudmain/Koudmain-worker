@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"log"
 
 	"koudmain-worker/internal/chat"
 
@@ -60,13 +61,16 @@ func TestServeWS_ValidTokenAndWebSocketConnection(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
 	token := makeTestToken(t, secret, 42)
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"?token="+token, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL+"?token="+token, nil)
 	if err != nil {
-		t.Fatalf("failed to dial websocket: %v", err)
+		log.Fatalf("dial failed: %v", err)
+	}
+
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
 	}
 	defer conn.Close()
 
-	// Give the handler a small moment to register the client.
 	time.Sleep(50 * time.Millisecond)
 
 	hub.SendToUser(42, []byte("hello websocket"))
