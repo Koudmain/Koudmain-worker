@@ -1,5 +1,5 @@
 # Stage 1: Base - Setup commun
-FROM golang:1.26.2-alpine AS base
+FROM golang:1.26.3-alpine AS base
 
 WORKDIR /usr/src/app
 
