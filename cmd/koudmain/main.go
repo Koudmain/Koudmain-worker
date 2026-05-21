@@ -34,7 +34,15 @@ func main() {
 
 	go func() {
 		ctx := context.Background()
-		msgs := redisRepo.Subscribe(ctx, "chat:messages")
+
+		msgs, closeSubscription := redisRepo.Subscribe(ctx, "chat:messages")
+
+		defer func() {
+			if err := closeSubscription(); err != nil {
+				log.Printf("Erreur lors de la fermeture de l'abonnement Redis: %v", err)
+			}
+		}()
+
 		for msg := range msgs {
 			var chatMsg model.ChatMessage
 			if err := json.Unmarshal([]byte(msg.Payload), &chatMsg); err != nil {
@@ -44,7 +52,6 @@ func main() {
 
 			log.Printf("Routing message to User %d", chatMsg.ReceiverID)
 			myHub.SendToUser(chatMsg.ReceiverID, []byte(msg.Payload))
-
 			myHub.SendToUser(chatMsg.SenderID, []byte(msg.Payload))
 		}
 	}()

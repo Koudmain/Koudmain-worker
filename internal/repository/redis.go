@@ -22,14 +22,11 @@ type RedisRepository struct {
 //   - channel: nom du channel Redis auquel s'abonner.
 //
 // Retour:
-//   - <-chan *redis.Message: canal recevant les messages publiés sur le channel.
-//
-// Le canal retourné provient de l'objet PubSub interne et doit être consommé
-// par l'appelant. Cette méthode ne ferme pas le canal ; la gestion de
-// l'annulation/release se fait via le contexte et la fermeture du client si besoin.
-func (r *RedisRepository) Subscribe(ctx context.Context, channel string) <-chan *redis.Message {
+//   - <-chan *redis.Message: canal recevant les messages publiés.
+//   - func() error: fonction pour fermer proprement l'abonnement et libérer les ressources.
+func (r *RedisRepository) Subscribe(ctx context.Context, channel string) (<-chan *redis.Message, func() error) {
 	pubsub := r.Client.Subscribe(ctx, channel)
-	return pubsub.Channel()
+	return pubsub.Channel(), pubsub.Close
 }
 
 // NewRedisRepository crée et configure un client Redis pointant sur

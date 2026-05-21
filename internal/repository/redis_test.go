@@ -57,7 +57,8 @@ func TestSubscribe(t *testing.T) {
 	}
 
 	channel := "chat:test"
-	messages := repo.Subscribe(context.Background(), channel)
+
+	messages, closeSubscription := repo.Subscribe(context.Background(), channel)
 
 	_ = s.Publish(channel, "hello")
 
@@ -74,5 +75,19 @@ func TestSubscribe(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for redis message")
+	}
+
+	if err := closeSubscription(); err != nil {
+		t.Fatalf("failed to close subscription: %v", err)
+	}
+
+	_ = s.Publish(channel, "world")
+
+	select {
+		case msg, open := <-messages:
+			if open && msg.Payload == "world" {
+				t.Fatal("received a message even though the subscription was closed")
+			}
+		case <-time.After(500 * time.Millisecond):
 	}
 }
