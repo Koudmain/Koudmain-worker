@@ -5,6 +5,12 @@ MAIN_PATH="./cmd/koudmain"
 # Commands
 all:	build
 
+test:
+	go test ./... -v
+
+test-cover:
+	go test ./... -cover
+
 build:
 	go build -o $(BINARY_NAME) $(MAIN_PATH)
 
@@ -23,4 +29,4 @@ clean:
 
 re: clean all
 
-.PHONY: all build run lint fmt clean re
+.PHONY: all test test-cover build run lint fmt clean re
