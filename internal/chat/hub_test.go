@@ -34,14 +34,15 @@ func TestRegisterUnregister(t *testing.T) {
 
 	h.Register(42, mc)
 
-	if _, ok := h.Clients[42]; !ok {
-		t.Fatalf("expected client registered")
+	conns, ok := h.clients[42]
+	if !ok || len(conns) != 1 || conns[0] != mc {
+		t.Fatalf("expected client registered in the slice")
 	}
 
-	h.Unregister(42)
+	h.Unregister(42, mc)
 
-	if _, ok := h.Clients[42]; ok {
-		t.Fatalf("expected client unregistered")
+	if _, ok := h.clients[42]; ok {
+		t.Fatalf("expected client map entry removed when no connections remain")
 	}
 
 	if !mc.closed {
@@ -67,4 +68,45 @@ func TestSendToUser(t *testing.T) {
 
 	// sending to non-existent user should be a no-op
 	h.SendToUser(99, []byte("nop"))
+}
+
+func TestMultiConnectionPerUser(t *testing.T) {
+	h := NewHub()
+
+	pcConn := &mockConn{}
+	mobileConn := &mockConn{}
+
+	userID := 10
+
+	h.Register(userID, pcConn)
+	h.Register(userID, mobileConn)
+
+	if len(h.clients[userID]) != 2 {
+		t.Fatalf("expected 2 active connections, got %d", len(h.clients[userID]))
+	}
+
+	payload := []byte("broadcast to all my devices")
+	h.SendToUser(userID, payload)
+
+	if len(pcConn.messages) != 1 || len(mobileConn.messages) != 1 {
+		t.Fatalf("expected both connections to receive the message")
+	}
+
+	h.Unregister(userID, pcConn)
+	if !pcConn.closed {
+		t.Fatalf("expected PC connection to be closed")
+	}
+	if mobileConn.closed {
+		t.Fatalf("expected Mobile connection to remain open")
+	}
+
+	if len(h.clients[userID]) != 1 {
+		t.Fatalf("expected 1 remaining connection for user, got %d", len(h.clients[userID]))
+	}
+
+	h.Unregister(userID, mobileConn)
+
+	if _, ok := h.clients[userID]; ok {
+		t.Fatalf("expected user to be completely removed from map")
+	}
 }

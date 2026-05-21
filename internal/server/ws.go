@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
 	"koudmain-worker/internal/chat"
 	"github.com/golang-jwt/jwt/v5"
@@ -18,9 +19,17 @@ import (
 // La fonction CheckOrigin est permissive ici (retourne toujours true) —
 // adapter cette vérification en production si nécessaire pour restreindre les origines.
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(_ *http.Request) bool { return true },
+    // CheckOrigin: func(r *http.Request) bool {
+    //     origin := r.Header.Get("Origin")
+	// 	// En production, on autorise uniquement notre frontend
+    //     if origin == "https://monfrontend.com" {
+    //         return true
+    //     }
+    //     return false
+    // },
+	// #nosec G402 -- Autorisé temporairement en dev local, à restreindre en production
+    CheckOrigin: func(_ *http.Request) bool { return true },
 }
-
 // ServeWS upgrade la requête HTTP en WebSocket après vérification du JWT.
 //
 // Arguments:
@@ -49,7 +58,16 @@ func ServeWS(hub *chat.Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	secretKey := []byte(os.Getenv("JWT_ACCESS_SECRET"))
+	secretStr := os.Getenv("JWT_ACCESS_SECRET")
+	if secretStr == "" {
+    log.Println("Erreur critique: JWT_ACCESS_SECRET n'est pas configuré")
+
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
+		return
+	}
+
+	secretKey := []byte(secretStr)
 
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -70,12 +88,24 @@ func ServeWS(hub *chat.Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userIDFloat, ok := claims["sub"].(float64)
-	if !ok {
-		log.Printf("Champ 'sub' manquant ou n'est pas un nombre dans le JWT")
+	var userID int
+
+	switch v := claims["sub"].(type) {
+	case float64:
+		userID = int(v)
+	case string:
+		id, err := strconv.Atoi(v)
+		if err != nil {
+			log.Printf("Impossible de parser le 'sub' string en entier: %v", err)
+			http.Error(w, "Unauthorized: invalid user ID format", http.StatusUnauthorized)
+			return
+		}
+		userID = id
+	default:
+		log.Printf("Champ 'sub' manquant ou type invalide dans le JWT")
+		http.Error(w, "Unauthorized: missing or invalid subject", http.StatusUnauthorized)
 		return
 	}
-	userID := int(userIDFloat)
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -87,7 +117,7 @@ func ServeWS(hub *chat.Hub, w http.ResponseWriter, r *http.Request) {
 	log.Printf("Utilisateur %d authentifié et connecté", userID)
 
 	defer func() {
-		hub.Unregister(userID)
+		hub.Unregister(userID, conn)
 		log.Printf("Utilisateur %d déconnecté", userID)
 	}()
 

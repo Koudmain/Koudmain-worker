@@ -15,19 +15,19 @@ type Conn interface {
 }
 
 // Hub gère les connexions clients identifiées par un userID.
-// Il protège l'accès concurrent à la map `Clients` via un mutex RW.
+// Il protège l'accès concurrent à la map `clients` via un mutex RW.
 type Hub struct {
-	Clients map[int]Conn
+	clients map[int][]Conn
 	mu      sync.RWMutex
 }
 
 // NewHub crée et initialise un Hub prêt à enregistrer des connexions.
 //
 // Retour:
-//   - *Hub: instance initialisée du Hub avec la map `Clients` prête.
+//   - *Hub: instance initialisée du Hub avec la map `clients` prête.
 func NewHub() *Hub {
 	return &Hub{
-		Clients: make(map[int]Conn),
+		clients: make(map[int][]Conn),
 	}
 }
 
@@ -38,27 +38,40 @@ func NewHub() *Hub {
 //   - conn: connexion implémentant l'interface `Conn`.
 //
 // Effets de bord:
-//   - modifie la map interne `Clients` (protégée par mutex).
+//   - modifie la map interne `clients` (protégée par mutex).
 func (h *Hub) Register(userID int, conn Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.Clients[userID] = conn
+	h.clients[userID] = append(h.clients[userID], conn)
 }
 
-// Unregister supprime la connexion associée à `userID` et ferme la connexion
-// si elle existe.
+// Unregister supprime une connexion SPÉCIFIQUE associée à `userID` et la ferme.
+// Cela évite qu'un onglet qui se ferme ne détruise les connexions des autres onglets ouverts.
 //
 // Arguments:
 //   - userID: identifiant unique de l'utilisateur à désenregistrer.
-//
-// Effets de bord:
-//   - ferme la connexion via `Close()` puis supprime l'entrée dans `Clients`.
-func (h *Hub) Unregister(userID int) {
+//   - connToRemove: la connexion précise à fermer et retirer.
+func (h *Hub) Unregister(userID int, connToRemove Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if conn, ok := h.Clients[userID]; ok {
-		conn.Close()
-		delete(h.Clients, userID)
+
+	conns, ok := h.clients[userID]
+	if !ok {
+		return
+	}
+
+	for i, conn := range conns {
+		if conn == connToRemove {
+			_ = conn.Close()
+
+			h.clients[userID] = append(conns[:i], conns[i+1:]...)
+			break
+		}
+	}
+
+	// 3. Si l'utilisateur n'a plus aucun onglet/appareil connecté, on nettoie la map
+	if len(h.clients[userID]) == 0 {
+		delete(h.clients, userID)
 	}
 }
 
@@ -77,13 +90,16 @@ func (h *Hub) Unregister(userID int) {
 // le client si l'envoi échoue.
 func (h *Hub) SendToUser(userID int, data []byte) {
 	h.mu.RLock()
-	client, ok := h.Clients[userID]
+	conns, ok := h.clients[userID]
 	h.mu.RUnlock()
 
-	if ok {
-		if err := client.WriteMessage(websocket.TextMessage, data); err != nil {
-			log.Printf("Impossible d'envoyer le message au client : %v", err)
-			return
+	if !ok {
+		return
+	}
+
+	for _, conn := range conns {
+		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			log.Printf("Impossible d'envoyer le message au client %d sur une de ses connexions : %v", userID, err)
 		}
 	}
 }
