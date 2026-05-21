@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"log"
 
 	"koudmain-worker/internal/chat"
 
@@ -63,7 +62,7 @@ func TestServeWS_ValidTokenAndWebSocketConnection(t *testing.T) {
 
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL+"?token="+token, nil)
 	if err != nil {
-		log.Fatalf("dial failed: %v", err)
+		t.Fatalf("dial failed: %v", err)
 	}
 
 	if resp != nil && resp.Body != nil {

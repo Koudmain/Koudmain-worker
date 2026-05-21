@@ -84,20 +84,18 @@ func (h *Hub) Unregister(userID int, connToRemove Conn) {
 //
 // Retour:
 //   - aucune valeur retournée; l'envoi est effectué de façon synchrone.
-//
-// Remarque : l'erreur renvoyée par `WriteMessage` n'est pas remontée
-// actuellement — on peut envisager de gérer l'erreur et de désenregistrer
-// le client si l'envoi échoue.
 func (h *Hub) SendToUser(userID int, data []byte) {
 	h.mu.RLock()
 	conns, ok := h.clients[userID]
-	h.mu.RUnlock()
-
-	if !ok {
+	if !ok || len(conns) == 0 {
+		h.mu.RUnlock()
 		return
 	}
 
-	for _, conn := range conns {
+	connsCopy := append([]Conn(nil), conns...)
+	h.mu.RUnlock()
+
+	for _, conn := range connsCopy {
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 			log.Printf("Impossible d'envoyer le message au client %d sur une de ses connexions : %v", userID, err)
 		}

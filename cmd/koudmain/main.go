@@ -61,14 +61,14 @@ func main() {
 	})
 
 	fmt.Println("Worker démarré sur le port :4000")
-	server := &http.Server{
+	httpServer := &http.Server{
 		Addr:         ":4000",
 		Handler:      nil,
 		ReadTimeout:  15 * 15,
 		WriteTimeout: 15 * 15,
 		IdleTimeout:  60 * 15,
 	}
-	if err := server.ListenAndServe(); err != nil {
+	if err := httpServer.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
