@@ -14,13 +14,6 @@ jobs:
     secrets:
       ORG_PAT: ${{ secrets.ORG_PAT }}
 
-  call-verify-issue:
-    name: "Verify Linked Issue"
-    if: github.event_name == 'pull_request'
-    uses: Koudmain/.github/.github/workflows/pr-verify-linked-issue.yml@main
-    secrets:
-      ORG_PAT: ${{ secrets.ORG_PAT }}
-
   call-require-checklist:
     name: "Require Checklist"
     if: github.event_name == 'pull_request'
