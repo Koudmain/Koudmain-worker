@@ -16,7 +16,7 @@ concurrency:
 jobs:
   events:
     name: "Events & Automation"
-    if: github.event_name == 'pull_request' && github.event.action != 'labeled'
+    if: github.event_name == 'pull_request'
     uses: Koudmain/.github/.github/workflows/orchestrator-events.yml@main
     permissions:
       pull-requests: write
