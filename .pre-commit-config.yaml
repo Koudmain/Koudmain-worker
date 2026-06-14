@@ -5,8 +5,8 @@ repos:
         name: 🎨 Format Go project
         entry: golangci-lint fmt
         language: system
-        files: \.(go)$
-        pass_filenames: false
+        types: [go]
+        pass_filenames: true
 
   - repo: local
     hooks:
@@ -14,8 +14,8 @@ repos:
         name: 🔍 Lint Go project
         entry: golangci-lint run
         language: system
-        files: \.(go)$
-        pass_filenames: false
+        types: [go]
+        pass_filenames: true
 
   - repo: local
     hooks:
