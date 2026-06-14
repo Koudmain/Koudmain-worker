@@ -17,7 +17,7 @@ jobs:
   events:
     name: "Events & Automation"
     if: github.event_name == 'pull_request'
-    uses: Koudmain/.github/.github/workflows/orchestrator-events.yml@KDM-47/fix-bug-force-ci
+    uses: Koudmain/.github/.github/workflows/orchestrator-events.yml@main
     permissions:
       pull-requests: write
     with:
@@ -27,7 +27,7 @@ jobs:
   force-ci:
     name: "Force CI"
     if: github.event.action == 'labeled' && github.event.label.name == 'force ci'
-    uses: Koudmain/.github/.github/workflows/orchestrator-ci.yml@KDM-47/fix-bug-force-ci
+    uses: Koudmain/.github/.github/workflows/orchestrator-ci.yml@main
     permissions:
       pull-requests: write
     with:
