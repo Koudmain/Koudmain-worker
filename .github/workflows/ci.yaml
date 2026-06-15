@@ -2,7 +2,7 @@ name: "CI"
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened, labeled]
+    types: [labeled]
   push:
     branches: [main, dev]
     paths-ignore:
@@ -14,19 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  events:
-    name: "Events & Automation"
-    if: github.event_name == 'pull_request'
-    uses: Koudmain/.github/.github/workflows/orchestrator-events.yml@main
-    permissions:
-      pull-requests: write
-    with:
-      target-repo-url: git@gitlab.com:koudmain/koudmain-worker.git
-    secrets: inherit
-
   force-ci:
     name: "Force CI"
-    if: github.event.action == 'labeled' && github.event.label.name == 'force ci'
+    if: github.event_name == 'push' || (github.event.action == 'labeled' && (github.event.label.name == 'force ci' || github.event.label.name == 'to merge'))
     uses: Koudmain/.github/.github/workflows/orchestrator-ci.yml@main
     permissions:
       pull-requests: write
