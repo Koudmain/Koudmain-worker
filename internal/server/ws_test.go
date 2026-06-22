@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -31,7 +32,7 @@ func makeTestToken(t *testing.T, secret string, sub int) string {
 
 func TestServeWS_MissingToken(t *testing.T) {
 	hub := chat.NewHub()
-	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ws", nil)
 	rec := httptest.NewRecorder()
 
 	ServeWS(hub, rec, req)
@@ -68,7 +69,11 @@ func TestServeWS_ValidTokenAndWebSocketConnection(t *testing.T) {
 	if resp != nil && resp.Body != nil {
 		defer resp.Body.Close()
 	}
-	defer conn.Close()
+
+	connCloseErr := conn.Close()
+	if connCloseErr != nil {
+		t.Fatalf("failed to close websocket connection: %v", err)
+	}
 
 	time.Sleep(50 * time.Millisecond)
 

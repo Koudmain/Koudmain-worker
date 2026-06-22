@@ -7,9 +7,9 @@ import (
 	"os"
 	"strconv"
 
-	"koudmain-worker/internal/chat"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+	"koudmain-worker/internal/chat"
 )
 
 // Package server fournit les handlers HTTP/WS utilisés par l'application.
@@ -19,17 +19,18 @@ import (
 // La fonction CheckOrigin est permissive ici (retourne toujours true) —
 // adapter cette vérification en production si nécessaire pour restreindre les origines.
 var upgrader = websocket.Upgrader{
-    // CheckOrigin: func(r *http.Request) bool {
-    //     origin := r.Header.Get("Origin")
+	// CheckOrigin: func(r *http.Request) bool {
+	//     origin := r.Header.Get("Origin")
 	// 	// En production, on autorise uniquement notre frontend
-    //     if origin == "https://monfrontend.com" {
-    //         return true
-    //     }
-    //     return false
-    // },
+	//     if origin == "https://monfrontend.com" {
+	//         return true
+	//     }
+	//     return false
+	// },
 	// #nosec G402 -- Autorisé temporairement en dev local, à restreindre en production
-    CheckOrigin: func(_ *http.Request) bool { return true },
+	CheckOrigin: func(_ *http.Request) bool { return true },
 }
+
 // ServeWS upgrade la requête HTTP en WebSocket après vérification du JWT.
 //
 // Arguments:
@@ -38,12 +39,12 @@ var upgrader = websocket.Upgrader{
 //   - r: requête HTTP entrante contenant la query `token`.
 //
 // Comportement :
-// - lit le paramètre `token` depuis la query string
-// - valide le JWT avec la clé `JWT_ACCESS_SECRET` (variable d'environnement)
-// - extrait la claim `sub` comme identifiant d'utilisateur (attendu en nombre)
-// - effectue l'upgrade WebSocket et enregistre la connexion dans le `hub`
-// - la connexion est conservée tant que `ReadMessage` renvoie des messages;
-//   en cas d'erreur la boucle se termine et la connexion est désenregistrée.
+//   - lit le paramètre `token` depuis la query string
+//   - valide le JWT avec la clé `JWT_ACCESS_SECRET` (variable d'environnement)
+//   - extrait la claim `sub` comme identifiant d'utilisateur (attendu en nombre)
+//   - effectue l'upgrade WebSocket et enregistre la connexion dans le `hub`
+//   - la connexion est conservée tant que `ReadMessage` renvoie des messages;
+//     en cas d'erreur la boucle se termine et la connexion est désenregistrée.
 //
 // Retour:
 //   - aucun retour direct ; la fonction écrit des réponses HTTP en cas d'erreur
@@ -60,7 +61,7 @@ func ServeWS(hub *chat.Hub, w http.ResponseWriter, r *http.Request) {
 
 	secretStr := os.Getenv("JWT_ACCESS_SECRET")
 	if secretStr == "" {
-    log.Println("Erreur critique: JWT_ACCESS_SECRET n'est pas configuré")
+		log.Println("Erreur critique: JWT_ACCESS_SECRET n'est pas configuré")
 
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 
@@ -94,9 +95,9 @@ func ServeWS(hub *chat.Hub, w http.ResponseWriter, r *http.Request) {
 	case float64:
 		userID = int(v)
 	case string:
-		id, err := strconv.Atoi(v)
-		if err != nil {
-			log.Printf("Impossible de parser le 'sub' string en entier: %v", err)
+		id, parseErr := strconv.Atoi(v)
+		if parseErr != nil {
+			log.Printf("Impossible de parser le 'sub' string en entier: %v", parseErr)
 			http.Error(w, "Unauthorized: invalid user ID format", http.StatusUnauthorized)
 			return
 		}
@@ -114,11 +115,11 @@ func ServeWS(hub *chat.Hub, w http.ResponseWriter, r *http.Request) {
 	}
 
 	hub.Register(userID, conn)
-	log.Printf("Utilisateur %d authentifié et connecté", userID)
+	log.Printf("Utilisateur %d authentifié et connecté", userID) //nolint:gosec // G706: userID is an int, not a user-controlled string
 
 	defer func() {
 		hub.Unregister(userID, conn)
-		log.Printf("Utilisateur %d déconnecté", userID)
+		log.Printf("Utilisateur %d déconnecté", userID) //nolint:gosec // G706: userID is an int, not a user-controlled string
 	}()
 
 	for {

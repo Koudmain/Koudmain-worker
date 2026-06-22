@@ -2,8 +2,8 @@ package chat
 
 import (
 	"github.com/gorilla/websocket"
-	"sync"
 	"log"
+	"sync"
 )
 
 // Conn est l'interface minimale attendue par le Hub pour représenter
