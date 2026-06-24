@@ -84,10 +84,10 @@ func TestSubscribe(t *testing.T) {
 	_ = s.Publish(channel, "world")
 
 	select {
-		case msg, open := <-messages:
-			if open && msg != nil && msg.Payload == "world" {
-				t.Fatal("received a message even though the subscription was closed")
-			}
-		case <-time.After(500 * time.Millisecond):
+	case msg, open := <-messages:
+		if open && msg != nil && msg.Payload == "world" {
+			t.Fatal("received a message even though the subscription was closed")
+		}
+	case <-time.After(500 * time.Millisecond):
 	}
 }

@@ -1,5 +1,6 @@
 package model
 
+// ChatMessage représente un message échangé dans une conversation entre deux utilisateurs.
 type ChatMessage struct {
 	ID             int    `json:"id"`
 	ConversationID int    `json:"conversation_id"`
