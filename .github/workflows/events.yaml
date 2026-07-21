@@ -1,0 +1,19 @@
+name: "Events"
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  events:
+    name: "Events & Automation"
+    uses: Koudmain/.github/.github/workflows/orchestrator-events.yml@main
+    permissions:
+      pull-requests: write
+    with:
+      target-repo-url: git@gitlab.com:koudmain/koudmain-worker.git
+    secrets: inherit

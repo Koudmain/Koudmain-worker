@@ -13,10 +13,8 @@ linters:
     - noctx # checks that HTTP requests use a Context (good for timeouts/cancellation)
     - errorlint # Ensures proper error wrapping with fmt.Errorf and %w
     - prealloc # Suggests slice preallocation (can help with frequent allocations)
-    - misspell # Fixes English typos in comments (optional but nice)
     - revive # Modern replacement for golint. Checks naming conventions, comments, etc.
     - gosec # Checks for common security issues (weak crypto, etc.)
-    - gosimple # Code simplification
     - nilnil # Detect of return nil, nil (useless)
 
   settings:
@@ -62,16 +60,11 @@ formatters:
     gofmt:
       simplify: false
       rewrite-rules:
-        - pattern: "interface{}"
-          replacement: "any"
-        - pattern: "a[b:len(a)]"
-          replacement: "a[b:]"
+        - pattern: interface{}
+          replacement: any
+        - pattern: a[b:len(a)]
+          replacement: a[b:]
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-rules:
-    # Less strict for security in tests
-    - path: _test\.go
-      linters:
-        - gosec
