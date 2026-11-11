@@ -164,6 +164,54 @@ func TestConsumerAcksPoisonMessages(t *testing.T) {
 	}
 }
 
+// cancellingHandler cancelle le contexte au premier appel, pour vérifier que
+// processAll n'entame pas les entrées suivantes du batch après l'annulation.
+type cancellingHandler struct {
+	cancel context.CancelFunc
+	calls  int
+}
+
+func (h *cancellingHandler) Handle(_ context.Context, _ model.PushJob) error {
+	h.calls++
+	h.cancel()
+	return nil
+}
+
+func TestConsumerStopsProcessingBatchOnContextCancel(t *testing.T) {
+	repo := newTestRepo(t)
+	opts := testOptions()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	if err := repo.EnsureConsumerGroup(context.Background(), opts.Stream, opts.Group); err != nil {
+		t.Fatalf("ensure group: %v", err)
+	}
+	addEntry(t, repo, map[string]any{"payload": validJob})
+	addEntry(t, repo, map[string]any{"payload": validJob})
+
+	entries, err := repo.ReadGroup(context.Background(), opts.Stream, opts.Group, opts.Consumer, ">", 10, opts.Block)
+	if err != nil || len(entries) != 2 {
+		t.Fatalf("read group: err=%v entries=%d", err, len(entries))
+	}
+
+	handler := &cancellingHandler{cancel: cancel}
+	c := NewConsumer(repo, handler, opts)
+
+	c.processAll(ctx, entries)
+
+	if handler.calls != 1 {
+		t.Fatalf("expected exactly 1 handler call before the cancelled context stopped the batch, got %d", handler.calls)
+	}
+
+	pending, err := repo.Client.XPending(context.Background(), opts.Stream, opts.Group).Result()
+	if err != nil {
+		t.Fatalf("xpending: %v", err)
+	}
+	if pending.Count != 1 {
+		t.Fatalf("expected the second entry to remain pending and untouched, got %d pending", pending.Count)
+	}
+}
+
 func TestConsumerRetriesFailedEntries(t *testing.T) {
 	repo := newTestRepo(t)
 	handler := newFakeHandler(func(call int) bool { return call < 3 })

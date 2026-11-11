@@ -152,10 +152,20 @@ func (c *Consumer) poll(ctx context.Context) error {
 
 // processAll traite les entrées et retourne le plus grand nombre de
 // tentatives parmi celles restées en échec (0 si aucune n'est à rejouer).
+//
+// À l'arrêt (ctx annulé), l'entrée en cours de traitement va jusqu'au bout
+// (handleEntry utilise context.WithoutCancel pour l'envoi et l'ack), mais les
+// entrées suivantes du batch ne sont pas démarrées : ça borne le temps entre
+// un SIGTERM et l'arrêt réel au traitement d'une seule entrée au lieu d'un
+// batch entier (jusqu'à BatchSize), pour rester sous le délai de grâce du
+// orchestrateur (ex: 10s par défaut pour `docker stop`).
 func (c *Consumer) processAll(ctx context.Context, entries []redis.XMessage) int {
 	maxAttempts := 0
 	for _, entry := range entries {
 		maxAttempts = max(maxAttempts, c.handleEntry(ctx, entry))
+		if ctx.Err() != nil {
+			break
+		}
 	}
 	return maxAttempts
 }
