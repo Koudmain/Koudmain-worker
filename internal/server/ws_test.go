@@ -93,3 +93,77 @@ func TestServeWS_ValidTokenAndWebSocketConnection(t *testing.T) {
 		t.Fatalf("unexpected payload: got %q want %q", string(payload), "hello websocket")
 	}
 }
+
+// dialTestServer starts ServeWS behind a test server and connects user 42 to it.
+func dialTestServer(t *testing.T, hub *chat.Hub) *websocket.Conn {
+	t.Helper()
+	const secret = "test-secret"
+	t.Setenv("JWT_ACCESS_SECRET", secret)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ServeWS(hub, w, r)
+	}))
+	t.Cleanup(server.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "?token=" + makeTestToken(t, secret, 42)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn
+}
+
+func shortenHeartbeat(t *testing.T) {
+	t.Helper()
+	previousPongWait, previousPingPeriod := pongWait, pingPeriod
+	pongWait, pingPeriod = 300*time.Millisecond, 50*time.Millisecond
+	t.Cleanup(func() { pongWait, pingPeriod = previousPongWait, previousPingPeriod })
+}
+
+func waitForConnections(t *testing.T, hub *chat.Hub, want int) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for hub.ConnectionCount(42) != want {
+		if time.Now().After(deadline) {
+			t.Fatalf("expected %d connection(s), got %d", want, hub.ConnectionCount(42))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestServeWS_RemovesAClientThatStopsAnsweringPings(t *testing.T) {
+	shortenHeartbeat(t)
+	hub := chat.NewHub()
+
+	// The client never reads, so it never answers the server pings (a phone gone offline).
+	dialTestServer(t, hub)
+	waitForConnections(t, hub, 1)
+
+	waitForConnections(t, hub, 0)
+}
+
+func TestServeWS_KeepsAClientThatAnswersPings(t *testing.T) {
+	shortenHeartbeat(t)
+	hub := chat.NewHub()
+
+	conn := dialTestServer(t, hub)
+	go func() {
+		// Reading lets gorilla answer pings with pongs.
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+	waitForConnections(t, hub, 1)
+
+	time.Sleep(3 * pongWait)
+
+	if hub.ConnectionCount(42) != 1 {
+		t.Fatalf("expected the responsive client to stay connected")
+	}
+}

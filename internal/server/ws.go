@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
@@ -18,6 +19,13 @@ import (
 // upgrader est utilisé pour promouvoir une requête HTTP vers une connexion WebSocket.
 // La fonction CheckOrigin est permissive ici (retourne toujours true) —
 // adapter cette vérification en production si nécessaire pour restreindre les origines.
+var (
+	// pongWait est le délai sans réponse au ping après lequel la connexion est considérée morte.
+	pongWait = 60 * time.Second
+	// pingPeriod doit rester inférieur à pongWait.
+	pingPeriod = 30 * time.Second
+)
+
 var upgrader = websocket.Upgrader{
 	// CheckOrigin: func(r *http.Request) bool {
 	//     origin := r.Header.Get("Origin")
@@ -114,6 +122,9 @@ func ServeWS(hub *chat.Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read once: the heartbeat timings are package variables so tests can shorten them.
+	wait, period := pongWait, pingPeriod
+
 	hub.Register(userID, conn)
 	log.Printf("Utilisateur %d authentifié et connecté", userID) //nolint:gosec // G706: userID is an int, not a user-controlled string
 
@@ -122,9 +133,38 @@ func ServeWS(hub *chat.Hub, w http.ResponseWriter, r *http.Request) {
 		log.Printf("Utilisateur %d déconnecté", userID) //nolint:gosec // G706: userID is an int, not a user-controlled string
 	}()
 
+	// A phone that loses the network never closes the socket: without pongs within
+	// pongWait, ReadMessage fails and the connection is removed from the hub.
+	_ = conn.SetReadDeadline(time.Now().Add(wait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(wait))
+	})
+
+	done := make(chan struct{})
+	defer close(done)
+	go ping(conn, period, done)
+
 	for {
 		if _, _, err := conn.ReadMessage(); err != nil {
 			break
+		}
+	}
+}
+
+// ping envoie un ping toutes les `period` jusqu'à la fin de la connexion.
+// WriteControl peut être appelé en parallèle du goroutine d'écriture du hub.
+func ping(conn *websocket.Conn, period time.Duration, done <-chan struct{}) {
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(chat.WriteWait)); err != nil {
+				return
+			}
+		case <-done:
+			return
 		}
 	}
 }
