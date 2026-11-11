@@ -116,8 +116,11 @@ func newPushConsumer(redisRepo *repository.RedisRepository) *push.Consumer {
 		backendURL = "http://backend:3000"
 	}
 	internalSecret := os.Getenv("INTERNAL_SERVICE_SECRET")
+	if err := push.ValidateInternalSecret(internalSecret, os.Getenv("APP_ENV")); err != nil {
+		log.Fatal(err)
+	}
 	if internalSecret == "" {
-		log.Println("WARNING: INTERNAL_SERVICE_SECRET absent, les appels internes au backend seront refusés")
+		log.Println("WARNING: INTERNAL_SERVICE_SECRET absent, les appels internes au backend seront refusés (APP_ENV != production)")
 	}
 
 	// context.Background() : les clients des providers (dont le refresh du

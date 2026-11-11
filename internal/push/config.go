@@ -2,6 +2,7 @@ package push
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"koudmain-worker/internal/model"
@@ -46,4 +47,21 @@ func NewSenders(ctx context.Context, cfg Config) map[model.Platform]Sender {
 	}
 
 	return senders
+}
+
+// ValidateInternalSecret vérifie qu'INTERNAL_SERVICE_SECRET est configuré
+// quand APP_ENV=production : sans lui, tous les appels aux endpoints internes
+// du backend échoueraient en 401 et les notifications seraient perdues sans
+// bruit (juste des logs et des lignes Failed en audit). Hors production (dev,
+// staging, ou APP_ENV absent), un secret vide n'est qu'un warning au démarrage
+// de main.go : ça ne doit pas bloquer le développement local.
+func ValidateInternalSecret(secret, appEnv string) error {
+	if secret != "" || appEnv != "production" {
+		return nil
+	}
+	return errors.New(
+		"INTERNAL_SERVICE_SECRET est requis quand APP_ENV=production : " +
+			"sans lui, les appels aux endpoints internes du backend échouent en 401 " +
+			"et les notifications sont perdues silencieusement",
+	)
 }

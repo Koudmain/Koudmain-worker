@@ -49,3 +49,31 @@ func TestNewSendersUsesConfiguredProviders(t *testing.T) {
 		t.Fatal("APNs should fall back to UnavailableSender")
 	}
 }
+
+func TestValidateInternalSecret(t *testing.T) {
+	cases := []struct {
+		name      string
+		secret    string
+		appEnv    string
+		wantError bool
+	}{
+		{"secret present, prod", "s3cr3t", "production", false},
+		{"secret present, dev", "s3cr3t", "development", false},
+		{"secret present, APP_ENV unset", "s3cr3t", "", false},
+		{"secret missing, APP_ENV unset (dev by default)", "", "", false},
+		{"secret missing, dev", "", "development", false},
+		{"secret missing, prod", "", "production", true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateInternalSecret(tc.secret, tc.appEnv)
+			if tc.wantError && err == nil {
+				t.Fatal("expected an error, got nil")
+			}
+			if !tc.wantError && err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+		})
+	}
+}
