@@ -26,6 +26,10 @@ type RedisRepository struct {
 //   - func() error: fonction pour fermer proprement l'abonnement et libérer les ressources.
 func (r *RedisRepository) Subscribe(ctx context.Context, channel string) (<-chan *redis.Message, func() error) {
 	pubsub := r.Client.Subscribe(ctx, channel)
+	// Attend la confirmation du SUBSCRIBE par Redis avant de retourner le
+	// channel : sans ça, un message publié juste après l'appel peut arriver
+	// avant que l'abonnement soit effectif côté serveur, et serait perdu.
+	_, _ = pubsub.Receive(ctx)
 	return pubsub.Channel(), pubsub.Close
 }
 
