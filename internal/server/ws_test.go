@@ -69,11 +69,7 @@ func TestServeWS_ValidTokenAndWebSocketConnection(t *testing.T) {
 	if resp != nil && resp.Body != nil {
 		defer resp.Body.Close()
 	}
-
-	connCloseErr := conn.Close()
-	if connCloseErr != nil {
-		t.Fatalf("failed to close websocket connection: %v", err)
-	}
+	t.Cleanup(func() { _ = conn.Close() })
 
 	time.Sleep(50 * time.Millisecond)
 
