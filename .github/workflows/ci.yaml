@@ -22,6 +22,7 @@ jobs:
       pull-requests: write
     with:
       language: "go"
+      go-version: "1.26"
       run-tests: true
       run-precommit: true
     secrets: inherit
