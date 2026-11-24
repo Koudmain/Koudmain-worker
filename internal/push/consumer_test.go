@@ -3,6 +3,8 @@ package push
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -21,11 +23,12 @@ type fakeHandler struct {
 	mu    sync.Mutex
 	jobs  []model.PushJob
 	fail  func(call int) bool
+	err   error // erreur retournée quand fail(call) est vrai
 	calls chan struct{}
 }
 
 func newFakeHandler(fail func(call int) bool) *fakeHandler {
-	return &fakeHandler{fail: fail, calls: make(chan struct{}, 100)}
+	return &fakeHandler{fail: fail, err: errors.New("invalid request"), calls: make(chan struct{}, 100)}
 }
 
 func (h *fakeHandler) Handle(_ context.Context, job model.PushJob) error {
@@ -35,7 +38,7 @@ func (h *fakeHandler) Handle(_ context.Context, job model.PushJob) error {
 	h.mu.Unlock()
 	h.calls <- struct{}{}
 	if h.fail != nil && h.fail(call) {
-		return errors.New("backend unreachable")
+		return h.err
 	}
 	return nil
 }
@@ -51,7 +54,7 @@ func testOptions() ConsumerOptions {
 	opts.MaxAttempts = 3
 	opts.Block = 20 * time.Millisecond
 	opts.RetryDelay = 5 * time.Millisecond
-	opts.MaxRetryDelay = 10 * time.Millisecond
+	opts.RetryAfterIdle = 30 * time.Millisecond
 	return opts
 }
 
@@ -189,15 +192,10 @@ func TestConsumerStopsProcessingBatchOnContextCancel(t *testing.T) {
 	addEntry(t, repo, map[string]any{"payload": validJob})
 	addEntry(t, repo, map[string]any{"payload": validJob})
 
-	entries, err := repo.ReadGroup(context.Background(), opts.Stream, opts.Group, opts.Consumer, ">", 10, opts.Block)
-	if err != nil || len(entries) != 2 {
-		t.Fatalf("read group: err=%v entries=%d", err, len(entries))
-	}
-
 	handler := &cancellingHandler{cancel: cancel}
-	c := NewConsumer(repo, handler, opts)
-
-	c.processAll(ctx, entries)
+	if err := NewConsumer(repo, handler, opts).poll(ctx); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
 
 	if handler.calls != 1 {
 		t.Fatalf("expected exactly 1 handler call before the cancelled context stopped the batch, got %d", handler.calls)
@@ -246,22 +244,19 @@ func TestConsumerGivesUpAfterMaxAttempts(t *testing.T) {
 	if handler.count() != opts.MaxAttempts {
 		t.Fatalf("expected exactly %d attempts, got %d", opts.MaxAttempts, handler.count())
 	}
-	if len(c.attempts) != 0 {
-		t.Fatalf("attempt counter should be cleared after giving up, got %v", c.attempts)
-	}
 }
 
-func TestConsumerReplaysPendingEntriesOnStartup(t *testing.T) {
+func TestConsumerTakesOverEntriesOfAStoppedReplica(t *testing.T) {
 	repo := newTestRepo(t)
 	opts := testOptions()
 	ctx := context.Background()
 
-	// Simule un crash : l'entrée a été délivrée au consumer mais jamais ackée.
+	// Un autre réplica a lu l'entrée puis s'est arrêté sans l'acker.
 	if err := repo.EnsureConsumerGroup(ctx, opts.Stream, opts.Group); err != nil {
 		t.Fatalf("EnsureConsumerGroup: %v", err)
 	}
 	addEntry(t, repo, map[string]any{"payload": validJob})
-	if entries, err := repo.ReadGroup(ctx, opts.Stream, opts.Group, opts.Consumer, ">", 10, -1); err != nil || len(entries) != 1 {
+	if entries, err := repo.ReadGroup(ctx, opts.Stream, opts.Group, "stopped-replica", ">", 10, -1); err != nil || len(entries) != 1 {
 		t.Fatalf("pre-delivery failed: %v (err=%v)", entries, err)
 	}
 
@@ -270,6 +265,64 @@ func TestConsumerReplaysPendingEntriesOnStartup(t *testing.T) {
 
 	waitCalls(t, handler, 1)
 	waitNoPending(t, repo, opts)
+}
+
+func TestConsumerDoesNotTakeAnEntryAnotherReplicaIsStillHandling(t *testing.T) {
+	repo := newTestRepo(t)
+	opts := testOptions()
+	opts.RetryAfterIdle = time.Hour
+	ctx := context.Background()
+
+	if err := repo.EnsureConsumerGroup(ctx, opts.Stream, opts.Group); err != nil {
+		t.Fatalf("EnsureConsumerGroup: %v", err)
+	}
+	addEntry(t, repo, map[string]any{"payload": validJob})
+	if _, err := repo.ReadGroup(ctx, opts.Stream, opts.Group, "busy-replica", ">", 10, -1); err != nil {
+		t.Fatalf("pre-delivery failed: %v", err)
+	}
+
+	handler := newFakeHandler(nil)
+	stop := startConsumer(t, NewConsumer(repo, handler, opts))
+	time.Sleep(100 * time.Millisecond)
+	stop()
+
+	if handler.count() != 0 {
+		t.Fatalf("the entry is in flight on another replica and must not be handled twice, got %d calls", handler.count())
+	}
+}
+
+func TestConsumerNeverGivesUpWhileTheBackendIsUnavailable(t *testing.T) {
+	repo := newTestRepo(t)
+	handler := newFakeHandler(func(call int) bool { return call <= 4 })
+	handler.err = fmt.Errorf("récupération des device tokens: %w",
+		&url.Error{Op: "Get", URL: "http://backend:3000/internal/device-tokens", Err: errors.New("connection refused")})
+	opts := testOptions()
+	opts.MaxAttempts = 2
+	startConsumer(t, NewConsumer(repo, handler, opts))
+
+	addEntry(t, repo, map[string]any{"payload": validJob})
+	// 4 échecs transitoires (au-delà de MaxAttempts) puis le backend revient.
+	waitCalls(t, handler, 5)
+	waitNoPending(t, repo, opts)
+}
+
+func TestIsTransient(t *testing.T) {
+	transport := &url.Error{Op: "Get", URL: "http://backend:3000", Err: errors.New("connection refused")}
+	for name, tc := range map[string]struct {
+		err  error
+		want bool
+	}{
+		"connection refused":         {fmt.Errorf("récupération des device tokens: %w", transport), true},
+		"backend 503":                {&repository.StatusError{Status: 503}, true},
+		"backend 503, wrapped":       {fmt.Errorf("récupération des device tokens: %w", &repository.StatusError{Status: 503}), true},
+		"backend 400":                {&repository.StatusError{Status: 400}, false},
+		"backend 401 (wrong secret)": {&repository.StatusError{Status: 401}, false},
+		"invalid response body":      {errors.New("réponse device-tokens invalide"), false},
+	} {
+		if got := isTransient(tc.err); got != tc.want {
+			t.Errorf("%s: isTransient = %v, want %v", name, got, tc.want)
+		}
+	}
 }
 
 // scriptedStream est un StreamClient dont les erreurs sont pilotées par le test.
@@ -300,6 +353,14 @@ func (s *scriptedStream) ReadGroup(context.Context, string, string, string, stri
 		s.readErrs = s.readErrs[1:]
 		return nil, err
 	}
+	return nil, nil
+}
+
+func (s *scriptedStream) StalePending(context.Context, string, string, time.Duration, int64) ([]redis.XPendingExt, error) {
+	return nil, nil
+}
+
+func (s *scriptedStream) Claim(context.Context, string, string, string, time.Duration, []string) ([]redis.XMessage, error) {
 	return nil, nil
 }
 
@@ -342,22 +403,5 @@ func TestConsumerRunReturnsImmediatelyWhenContextIsCancelled(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("Run should return when the context is already cancelled")
-	}
-}
-
-func TestConsumerBackoff(t *testing.T) {
-	c := NewConsumer(&scriptedStream{}, newFakeHandler(nil), DefaultConsumerOptions())
-
-	for attempts, want := range map[int]time.Duration{
-		1: 2 * time.Second,
-		2: 4 * time.Second,
-		3: 8 * time.Second,
-		4: 16 * time.Second,
-		5: 30 * time.Second,
-		9: 30 * time.Second,
-	} {
-		if got := c.backoff(attempts); got != want {
-			t.Errorf("backoff(%d) = %s, want %s", attempts, got, want)
-		}
 	}
 }
