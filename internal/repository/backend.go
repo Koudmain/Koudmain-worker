@@ -124,8 +124,24 @@ func (c *BackendClient) do(ctx context.Context, method, endpoint string, body []
 	return resp, nil
 }
 
-// expectStatus retourne une erreur si le status de `resp` n'est pas dans
-// `accepted`. Le corps (tronqué) est inclus dans l'erreur.
+// StatusError est retournée quand le backend répond avec un status inattendu.
+// StatusCode permet à l'appelant de distinguer un 5xx (rejouable) d'un 4xx.
+type StatusError struct {
+	Method string
+	Path   string
+	Status int
+	Body   string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("%s %s: status inattendu %d: %s", e.Method, e.Path, e.Status, e.Body)
+}
+
+// StatusCode retourne le status HTTP renvoyé par le backend.
+func (e *StatusError) StatusCode() int { return e.Status }
+
+// expectStatus retourne une *StatusError si le status de `resp` n'est pas
+// dans `accepted`. Le corps (tronqué) est inclus dans l'erreur.
 func expectStatus(resp *http.Response, accepted ...int) error {
 	for _, status := range accepted {
 		if resp.StatusCode == status {
@@ -133,6 +149,10 @@ func expectStatus(resp *http.Response, accepted ...int) error {
 		}
 	}
 	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
-	return fmt.Errorf("%s %s: status inattendu %d: %s",
-		resp.Request.Method, resp.Request.URL.Path, resp.StatusCode, strings.TrimSpace(string(snippet)))
+	return &StatusError{
+		Method: resp.Request.Method,
+		Path:   resp.Request.URL.Path,
+		Status: resp.StatusCode,
+		Body:   strings.TrimSpace(string(snippet)),
+	}
 }

@@ -106,3 +106,45 @@ func TestReadGroupWithoutGroupFails(t *testing.T) {
 		t.Fatalf("expected a NOGROUP error, got %v", err)
 	}
 }
+
+func TestStalePendingAndClaim(t *testing.T) {
+	repo := newTestRepo(t)
+	ctx := context.Background()
+	const idle = 30 * time.Millisecond
+
+	if err := repo.EnsureConsumerGroup(ctx, "jobs", "group"); err != nil {
+		t.Fatalf("EnsureConsumerGroup failed: %v", err)
+	}
+	id, err := repo.Client.XAdd(ctx, &redis.XAddArgs{Stream: "jobs", Values: map[string]any{"payload": "{}"}}).Result()
+	if err != nil {
+		t.Fatalf("XAdd failed: %v", err)
+	}
+	if _, err = repo.ReadGroup(ctx, "jobs", "group", "replica-a", ">", 10, -1); err != nil {
+		t.Fatalf("ReadGroup failed: %v", err)
+	}
+
+	// Lue à l'instant par replica-a : pas encore inactive.
+	stale, err := repo.StalePending(ctx, "jobs", "group", idle, 10)
+	if err != nil || len(stale) != 0 {
+		t.Fatalf("a fresh entry must not be stale, got %v (err=%v)", stale, err)
+	}
+
+	time.Sleep(idle + 20*time.Millisecond)
+	stale, err = repo.StalePending(ctx, "jobs", "group", idle, 10)
+	if err != nil || len(stale) != 1 || stale[0].ID != id || stale[0].Consumer != "replica-a" || stale[0].RetryCount != 1 {
+		t.Fatalf("expected the idle entry with 1 delivery, got %v (err=%v)", stale, err)
+	}
+
+	claimed, err := repo.Claim(ctx, "jobs", "group", "replica-b", idle, []string{id})
+	if err != nil || len(claimed) != 1 || claimed[0].ID != id {
+		t.Fatalf("replica-b should take over the entry, got %v (err=%v)", claimed, err)
+	}
+	// Pas testable ici : miniredis ignore le min-idle de XCLAIM (Redis refuse de
+	// redonner une entrée qu'un autre consumer vient de reprendre).
+
+	time.Sleep(idle + 20*time.Millisecond)
+	stale, err = repo.StalePending(ctx, "jobs", "group", idle, 10)
+	if err != nil || len(stale) != 1 || stale[0].Consumer != "replica-b" || stale[0].RetryCount != 2 {
+		t.Fatalf("expected the entry owned by replica-b with 2 deliveries, got %v (err=%v)", stale, err)
+	}
+}

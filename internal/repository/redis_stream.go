@@ -56,6 +56,44 @@ func (r *RedisRepository) ReadGroup(
 	return res[0].Messages, nil
 }
 
+// StalePending liste les entrées délivrées mais pas ackées depuis au moins
+// `minIdle`, tous consumers confondus (XPENDING ... IDLE), avec leur nombre
+// de livraisons tenu par Redis (RetryCount). Nécessite Redis >= 6.2.
+func (r *RedisRepository) StalePending(
+	ctx context.Context,
+	stream, group string,
+	minIdle time.Duration,
+	count int64,
+) ([]redis.XPendingExt, error) {
+	return r.Client.XPendingExt(ctx, &redis.XPendingExtArgs{
+		Stream: stream,
+		Group:  group,
+		Idle:   minIdle,
+		Start:  "-",
+		End:    "+",
+		Count:  count,
+	}).Result()
+}
+
+// Claim transfère les entrées `ids` au consumer donné (XCLAIM), seulement si
+// elles sont toujours inactives depuis `minIdle` : celles qu'un autre
+// consumer vient de reprendre ne sont pas renvoyées. Chaque reprise ajoute
+// une livraison au compteur Redis.
+func (r *RedisRepository) Claim(
+	ctx context.Context,
+	stream, group, consumer string,
+	minIdle time.Duration,
+	ids []string,
+) ([]redis.XMessage, error) {
+	return r.Client.XClaim(ctx, &redis.XClaimArgs{
+		Stream:   stream,
+		Group:    group,
+		Consumer: consumer,
+		MinIdle:  minIdle,
+		Messages: ids,
+	}).Result()
+}
+
 // Ack acquitte l'entrée `id` du stream pour le groupe (XACK) afin qu'elle
 // sorte de la liste des pending.
 func (r *RedisRepository) Ack(ctx context.Context, stream, group, id string) error {
