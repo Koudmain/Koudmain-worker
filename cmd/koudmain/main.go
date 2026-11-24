@@ -133,7 +133,7 @@ func newPushConsumer(redisRepo *repository.RedisRepository) *push.Consumer {
 			KeyID:      os.Getenv("APNS_KEY_ID"),
 			TeamID:     os.Getenv("APNS_TEAM_ID"),
 			BundleID:   os.Getenv("APNS_BUNDLE_ID"),
-			Production: os.Getenv("APNS_PRODUCTION") == "true",
+			Production: push.APNsProduction(os.Getenv("APNS_PRODUCTION"), os.Getenv("APP_ENV")),
 		},
 	})
 

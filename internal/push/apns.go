@@ -24,11 +24,13 @@ type APNsConfig struct {
 }
 
 // apnsInvalidTokenReasons sont les raisons APNs pour lesquelles le token est
-// considéré comme invalide (mapping repris de l'ancien push.constants.ts).
+// considéré comme invalide et supprimé côté backend.
+// DeviceTokenNotForTopic n'en fait pas partie : le token est valide mais
+// appartient à une autre app que APNS_BUNDLE_ID (typo de config, ou app
+// employer vs worker). Le supprimer effacerait des tokens sains.
 var apnsInvalidTokenReasons = map[string]bool{
-	apns2.ReasonBadDeviceToken:         true,
-	apns2.ReasonUnregistered:           true,
-	apns2.ReasonDeviceTokenNotForTopic: true,
+	apns2.ReasonBadDeviceToken: true,
+	apns2.ReasonUnregistered:   true,
 }
 
 // apnsClient est le sous-ensemble de *apns2.Client utilisé par APNsSender.

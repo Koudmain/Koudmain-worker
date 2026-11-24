@@ -93,7 +93,8 @@ func TestAPNsSenderErrorMapping(t *testing.T) {
 	}{
 		{http.StatusBadRequest, `{"reason":"BadDeviceToken"}`, true, "BadDeviceToken"},
 		{http.StatusGone, `{"reason":"Unregistered","timestamp":1700000000000}`, true, "Unregistered"},
-		{http.StatusBadRequest, `{"reason":"DeviceTokenNotForTopic"}`, true, "DeviceTokenNotForTopic"},
+		// Erreur de config (bundle ID), pas un token mort : on ne le supprime pas.
+		{http.StatusBadRequest, `{"reason":"DeviceTokenNotForTopic"}`, false, "DeviceTokenNotForTopic"},
 		{http.StatusRequestEntityTooLarge, `{"reason":"PayloadTooLarge"}`, false, "PayloadTooLarge"},
 		{http.StatusInternalServerError, ``, false, "status 500"},
 	}

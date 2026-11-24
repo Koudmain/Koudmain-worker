@@ -77,3 +77,27 @@ func TestValidateInternalSecret(t *testing.T) {
 		})
 	}
 }
+
+func TestAPNsProduction(t *testing.T) {
+	cases := []struct {
+		name           string
+		apnsProduction string
+		appEnv         string
+		want           bool
+	}{
+		{"unset in prod defaults to production", "", "production", true},
+		{"unset outside prod defaults to sandbox", "", "development", false},
+		{"unset with APP_ENV unset defaults to sandbox", "", "", false},
+		{"explicit true wins outside prod (TestFlight on staging)", "true", "development", true},
+		{"explicit false wins in prod", "false", "production", false},
+		{"invalid value falls back to APP_ENV", "yes", "production", true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := APNsProduction(tc.apnsProduction, tc.appEnv); got != tc.want {
+				t.Fatalf("APNsProduction(%q, %q) = %v, want %v", tc.apnsProduction, tc.appEnv, got, tc.want)
+			}
+		})
+	}
+}

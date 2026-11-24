@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strconv"
 
 	"koudmain-worker/internal/model"
 )
@@ -47,6 +48,17 @@ func NewSenders(ctx context.Context, cfg Config) map[model.Platform]Sender {
 	}
 
 	return senders
+}
+
+// APNsProduction choisit le serveur APNs. Une valeur explicite de
+// APNS_PRODUCTION gagne ; absente, on suit APP_ENV. Un token de production
+// envoyé au sandbox répond BadDeviceToken et serait supprimé : oublier la
+// variable en prod effacerait tous les tokens iOS.
+func APNsProduction(apnsProduction, appEnv string) bool {
+	if v, err := strconv.ParseBool(apnsProduction); err == nil {
+		return v
+	}
+	return appEnv == "production"
 }
 
 // ValidateInternalSecret vérifie qu'INTERNAL_SERVICE_SECRET est configuré
